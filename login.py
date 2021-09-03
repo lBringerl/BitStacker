@@ -20,17 +20,23 @@ class Shell:
     """ """
     
     supported_cmds = ('init_client',
-                      'get_best_bid', 
+                      'get_last_quote', 
                       'get_deposit_address',
+                      'get_open_orders',
+                      'set_limit_order',
                       'exit')
     
     def __init__(self):
         """ """
         self.current_controller = ManualControl()
         self.init_client = InitClientCommand(self, self.current_controller)
-        self.get_best_bid = GetCurrentPiceCommand(
+        self.get_last_quote = GetLastQuoteCommand(
             self, self.current_controller)
         self.get_deposit_address = GetDepositAddressCommand(
+            self, self.current_controller)
+        self.get_open_orders = GetOpenOrdersCommand(
+            self, self.current_controller)
+        self.set_limit_order = SetLimitOrderCommand(
             self, self.current_controller)
         self.exit = ExitCommand(self, self.current_controller)
     
@@ -55,10 +61,14 @@ class Shell:
             print(f'Command "{cmd_name}" is not supported. Supported commands'
                   f'are: {self.supported_cmds}')
             return 0
-        elif cmd_name == 'get_best_bid':
-            return self.get_best_bid.execute(unproc_args)
+        elif cmd_name == 'get_last_quote':
+            return self.get_last_quote.execute(unproc_args)
         elif cmd_name == 'get_deposit_address':
             return self.get_deposit_address.execute(unproc_args)
+        elif cmd_name == 'get_open_orders':
+            return self.get_open_orders.execute(unproc_args)
+        elif cmd_name == 'set_limit_order':
+            return self.set_limit_order.execute(unproc_args)
         elif cmd_name == 'exit':
             return self.exit.execute(unproc_args)
     
@@ -83,9 +93,9 @@ class ManualControl():
         logging.debug('invoke init_client of ManualControl')
         self.client = bitmex.bitmex(api_key=public_key, api_secret=private_key)
     
-    def get_best_bid(self):
+    def get_last_quote(self):
         """ """
-        logging.debug('invoke get_best_bid of ManualControl')
+        logging.debug('invoke get_last_quote of ManualControl')
         result = None
         cur_timestamp = time.time()
         cur_time = datetime.datetime.fromtimestamp(cur_timestamp,
@@ -105,6 +115,24 @@ class ManualControl():
         deposit_addr, response = self.client.User.\
             User_getDepositAddress().result()
         return deposit_addr
+    
+    def get_open_orders(self):
+        """ """
+        logging.debug('invoke get_open_orders of ManualControl')
+        orders, response = self.client.Order.Order_getOrders(
+            filter='{"open":true}',
+            symbol='XBTUSD',
+            count=100).result()
+        return orders
+    
+    def set_limit_order(self, quantity, price):
+        """ """
+        logging.debug('invoke set_limit_order of ManualControl')
+        order, response = self.client.Order.Order_new(
+            symbol='XBTUSD',
+            orderQty=quantity,
+            price=price,
+            ordType='Limit').result()
 
 
 class Command(metaclass=ABCMeta):
@@ -135,12 +163,12 @@ class InitClientCommand(Command):
         self.manual_control.init_client(**vars(args))
 
 
-class GetCurrentPiceCommand(Command):
+class GetLastQuoteCommand(Command):
     """ """
     
     def execute(self, args_string: str) -> None:
-        price = self.manual_control.get_best_bid()
-        self.shell.shell_print(f'Best bid: {price}')
+        price = self.manual_control.get_last_quote()
+        self.shell.shell_print(f'Last quote: {price}')
 
 
 class GetDepositAddressCommand(Command):
@@ -159,6 +187,24 @@ class ExitCommand(Command):
         self.shell.shell_exit()
 
 
+class GetOpenOrdersCommand(Command):
+    """ """
+    
+    def execute(self, args_string: str) -> None:
+        orders = self.manual_control.get_open_orders()
+        self.shell.shell_print(f'Open orders: {orders}')
+
+
+class SetLimitOrderCommand(Command):
+    """ """
+    
+    args_names = ['--quantity', '--price']
+    
+    def execute(self, args_string: str) -> None:
+        args = self.arg_parser.parse_args(args_string.split())
+        order = self.manual_control.set_limit_order(**vars(args))
+
+
 def main():
     """ """
     shell = Shell()
@@ -169,3 +215,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
