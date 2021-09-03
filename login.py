@@ -133,6 +133,7 @@ class ManualControl():
             orderQty=quantity,
             price=price,
             ordType='Limit').result()
+        return order
 
 
 class Command(metaclass=ABCMeta):
@@ -203,6 +204,7 @@ class SetLimitOrderCommand(Command):
     def execute(self, args_string: str) -> None:
         args = self.arg_parser.parse_args(args_string.split())
         order = self.manual_control.set_limit_order(**vars(args))
+        self.shell.shell_print(f'Order set: {order}')
 
 
 def main():
