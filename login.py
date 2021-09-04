@@ -10,12 +10,66 @@ import argparse
 import datetime
 import logging
 import time
+from typing import Union
 
 import bitmex
 
 import api_keys
 
 
+class Strategy(metaclass=ABCMeta):
+    """ """
+    
+    @abstractmethod
+    def run(self) -> None:
+        pass
+
+
+class DummyStrategy(Strategy):
+    """ """
+    
+    def __init__(self):
+        """ """
+        print('Init dummy strategy')
+    
+    def run(self) -> None:
+        """ """
+        print('Run dummy strategy')
+    
+
+class Context:
+    """ """
+    
+    supported_strategies = ('dummy',)
+    
+    def __init__(self):
+        """ """
+        self._strategy = None
+    
+    @classmethod
+    def strategy_type_from_string(cls, strategy_name: str) -> \
+        Union[Strategy, None]:
+        """ """
+        if strategy_name not in cls.supported_strategies:
+            print(f'Strategy "{strategy_name}" is not supported. '
+                  f'Supported strategies are: {self.supported_strategies}')
+            return None
+        if strategy_name == 'dummy':
+            return DummyStrategy
+        
+    def set_strategy(self, strategy: Strategy):
+        """ """
+        self._strategy = strategy()
+    
+    def run_strategy(self):
+        """ """
+        self._strategy.run()
+    
+    def get_strategy(self):
+        """ """
+        return self._strategy
+    
+    
 class Shell:
     """ """
     
@@ -24,21 +78,31 @@ class Shell:
                       'get_deposit_address',
                       'get_open_orders',
                       'set_limit_order',
-                      'exit')
+                      'exit',
+                      'set_strategy',
+                      'run_strategy',
+                      'get_current_strategy')
     
-    def __init__(self):
+    def __init__(self, manual_controller, strategy_context):
         """ """
-        self.current_controller = ManualControl()
-        self.init_client = InitClientCommand(self, self.current_controller)
-        self.get_last_quote = GetLastQuoteCommand(
-            self, self.current_controller)
-        self.get_deposit_address = GetDepositAddressCommand(
-            self, self.current_controller)
-        self.get_open_orders = GetOpenOrdersCommand(
-            self, self.current_controller)
-        self.set_limit_order = SetLimitOrderCommand(
-            self, self.current_controller)
-        self.exit = ExitCommand(self, self.current_controller)
+        self.init_client = InitClientShellCommand(
+            self, manual_controller, strategy_context)
+        self.get_last_quote = GetLastQuoteShellCommand(
+            self, manual_controller, strategy_context)
+        self.get_deposit_address = GetDepositAddressShellCommand(
+            self, manual_controller, strategy_context)
+        self.get_open_orders = GetOpenOrdersShellCommand(
+            self, manual_controller, strategy_context)
+        self.set_limit_order = SetLimitOrderShellCommand(
+            self, manual_controller, strategy_context)
+        self.exit = ExitShellCommand(
+            self, manual_controller, strategy_context)
+        self.set_strategy = SetStrategyShellCommand(
+            self, manual_controller, strategy_context)
+        self.run_strategy = RunStrategyShellCommand(
+            self, manual_controller, strategy_context)
+        self.get_current_strategy = GetCurrentStrategyShellCommand(
+            self, manual_controller, strategy_context)
     
     def run_shell(self):
         """ """
@@ -58,8 +122,8 @@ class Shell:
         if len(inp_split) > 1:
             unproc_args = inp_split[1] 
         if cmd_name not in self.supported_cmds:
-            print(f'Command "{cmd_name}" is not supported. Supported commands'
-                  f'are: {self.supported_cmds}')
+            print(f'Shell command "{cmd_name}" is not supported. '
+                  f'Supported commands are: {self.supported_cmds}')
             return 0
         elif cmd_name == 'get_last_quote':
             return self.get_last_quote.execute(unproc_args)
@@ -71,6 +135,12 @@ class Shell:
             return self.set_limit_order.execute(unproc_args)
         elif cmd_name == 'exit':
             return self.exit.execute(unproc_args)
+        elif cmd_name == 'set_strategy':
+            return self.set_strategy.execute(unproc_args)
+        elif cmd_name == 'run_strategy':
+            return self.run_strategy.execute(unproc_args)
+        elif cmd_name == 'get_current_strategy':
+            return self.get_current_strategy.execute(unproc_args)
     
     def shell_print(self, data):
         """ """
@@ -79,15 +149,15 @@ class Shell:
     def shell_exit(self):
         """ """
         self.running = False
+    
 
-
-class ManualControl():
+class ManualControl:
     """ """
     
     def __init__(self):
         """ """
         self.client = None
-        
+    
     def init_client(self, public_key, private_key):
         """ """
         logging.debug('invoke init_client of ManualControl')
@@ -136,14 +206,16 @@ class ManualControl():
         return order
 
 
-class Command(metaclass=ABCMeta):
+class ShellCommand(metaclass=ABCMeta):
     """ """
     
     args_names = []
     
-    def __init__(self, shell: Shell, manual_control: ManualControl) -> None:
+    def __init__(self, shell: Shell, manual_control: ManualControl, \
+                 strategy_context: Strategy) -> None:
         self.shell = shell
         self.manual_control = manual_control
+        self.strategy_context = strategy_context
         if self.args_names:
             self.arg_parser = argparse.ArgumentParser()
             for arg in self.args_names:
@@ -154,17 +226,17 @@ class Command(metaclass=ABCMeta):
         pass
 
 
-class InitClientCommand(Command):
+class InitClientShellCommand(ShellCommand):
     """ """
     
     args_names = ['--public_key', '--private_key']
     
     def execute(self, args_string: str) -> None:
-        args = self.arg_parser.parse_args(args_string.split())
-        self.manual_control.init_client(**vars(args))
+        args = vars(self.arg_parser.parse_args(args_string.split()))
+        self.manual_control.init_client(**args)
 
 
-class GetLastQuoteCommand(Command):
+class GetLastQuoteShellCommand(ShellCommand):
     """ """
     
     def execute(self, args_string: str) -> None:
@@ -172,15 +244,15 @@ class GetLastQuoteCommand(Command):
         self.shell.shell_print(f'Last quote: {price}')
 
 
-class GetDepositAddressCommand(Command):
+class GetDepositAddressShellCommand(ShellCommand):
     """ """
     
     def execute(self, args_string: str) -> None:
         addr = self.manual_control.get_deposit_address()
         self.shell.shell_print(f'Deposit address: {addr}')
-        
-        
-class ExitCommand(Command):
+
+
+class ExitShellCommand(ShellCommand):
     """ """
     
     def execute(self, args_string: str) -> None:
@@ -188,7 +260,7 @@ class ExitCommand(Command):
         self.shell.shell_exit()
 
 
-class GetOpenOrdersCommand(Command):
+class GetOpenOrdersShellCommand(ShellCommand):
     """ """
     
     def execute(self, args_string: str) -> None:
@@ -196,20 +268,46 @@ class GetOpenOrdersCommand(Command):
         self.shell.shell_print(f'Open orders: {orders}')
 
 
-class SetLimitOrderCommand(Command):
+class SetLimitOrderShellCommand(ShellCommand):
     """ """
     
     args_names = ['--quantity', '--price']
     
     def execute(self, args_string: str) -> None:
-        args = self.arg_parser.parse_args(args_string.split())
-        order = self.manual_control.set_limit_order(**vars(args))
+        args = vars(self.arg_parser.parse_args(args_string.split()))
+        order = self.manual_control.set_limit_order(**args)
         self.shell.shell_print(f'Order set: {order}')
+
+
+class SetStrategyShellCommand(ShellCommand):
+    """ """
+    
+    args_names = ['--strategy']
+    
+    def execute(self, args_string: str) -> None:
+        args = vars(self.arg_parser.parse_args(args_string.split()))
+        args['strategy'] = Context.strategy_type_from_string(args['strategy'])
+        self.strategy_context.set_strategy(**args)
+
+
+class RunStrategyShellCommand(ShellCommand):
+    """ """
+    
+    def execute(self, args_string: str) -> None:
+        self.strategy_context.run_strategy()
+        
+
+class GetCurrentStrategyShellCommand(ShellCommand):
+    """ """
+    
+    def execute(self, args_string: str) -> None:
+        strategy = self.strategy_context.get_strategy()
+        self.shell.shell_print(f'Current strategy is: {strategy}')
 
 
 def main():
     """ """
-    shell = Shell()
+    shell = Shell(ManualControl(), Context())
     shell.run_shell()
     
     return 0
