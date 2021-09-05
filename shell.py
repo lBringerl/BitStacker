@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Aug 22 16:23:56 2021
+Created on Sun Sep  5 17:49:41 2021
 
 @author: lbrin
 """
@@ -10,66 +10,13 @@ import argparse
 import datetime
 import logging
 import time
-from typing import Union
 
 import bitmex
 
 import api_keys
+from strategies import Context, Strategy
 
 
-class Strategy(metaclass=ABCMeta):
-    """ """
-    
-    @abstractmethod
-    def run(self) -> None:
-        pass
-
-
-class DummyStrategy(Strategy):
-    """ """
-    
-    def __init__(self):
-        """ """
-        print('Init dummy strategy')
-    
-    def run(self) -> None:
-        """ """
-        print('Run dummy strategy')
-    
-
-class Context:
-    """ """
-    
-    supported_strategies = ('dummy',)
-    
-    def __init__(self):
-        """ """
-        self._strategy = None
-    
-    @classmethod
-    def strategy_type_from_string(cls, strategy_name: str) -> \
-        Union[Strategy, None]:
-        """ """
-        if strategy_name not in cls.supported_strategies:
-            print(f'Strategy "{strategy_name}" is not supported. '
-                  f'Supported strategies are: {self.supported_strategies}')
-            return None
-        if strategy_name == 'dummy':
-            return DummyStrategy
-        
-    def set_strategy(self, strategy: Strategy):
-        """ """
-        self._strategy = strategy()
-    
-    def run_strategy(self):
-        """ """
-        self._strategy.run()
-    
-    def get_strategy(self):
-        """ """
-        return self._strategy
-    
-    
 class Shell:
     """ """
     
@@ -108,7 +55,7 @@ class Shell:
         """ """
         logging.info('shell is running')
         self.running = True
-        exit_code = self.init_client.execute(
+        self.init_client.execute(
             f'--public_key {api_keys.PUBLIC_KEY} '
             f'--private_key {api_keys.PRIVATE_KEY}')
         while self.running:
@@ -149,7 +96,7 @@ class Shell:
     def shell_exit(self):
         """ """
         self.running = False
-    
+
 
 class ManualControl:
     """ """
@@ -303,18 +250,3 @@ class GetCurrentStrategyShellCommand(ShellCommand):
     def execute(self, args_string: str) -> None:
         strategy = self.strategy_context.get_strategy()
         self.shell.shell_print(f'Current strategy is: {strategy}')
-
-
-def main():
-    """ """
-    shell = Shell(ManualControl(), Context())
-    shell.run_shell()
-    
-    return 0
-
-
-if __name__ == '__main__':
-    main()
-
-
-
