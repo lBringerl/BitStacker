@@ -17,6 +17,61 @@ import api_keys
 from strategies import Context, Strategy
 
 
+class ManualControl:
+    """ """
+    
+    def __init__(self):
+        """ """
+        self.client = None
+    
+    def init_client(self, public_key, private_key):
+        """ """
+        logging.debug('invoke init_client of ManualControl')
+        self.client = bitmex.bitmex(api_key=public_key, api_secret=private_key)
+    
+    def get_last_quote(self):
+        """ """
+        logging.debug('invoke get_last_quote of ManualControl')
+        result = None
+        cur_timestamp = time.time()
+        cur_time = datetime.datetime.fromtimestamp(cur_timestamp,
+                                                   tz=datetime.timezone.utc)
+        result_lst, response = self.client.Quote.Quote_get(
+            symbol='XBTUSD',
+            count=1,
+            reverse=True,
+            endTime=cur_time).result()
+        if result_lst:
+            result = result_lst[0]
+        return result
+    
+    def get_deposit_address(self):
+        """ """
+        logging.debug('invoke get_deposit_address of ManualControl')
+        deposit_addr, response = self.client.User.\
+            User_getDepositAddress().result()
+        return deposit_addr
+    
+    def get_open_orders(self):
+        """ """
+        logging.debug('invoke get_open_orders of ManualControl')
+        orders, response = self.client.Order.Order_getOrders(
+            filter='{"open":true}',
+            symbol='XBTUSD',
+            count=100).result()
+        return orders
+    
+    def set_limit_order(self, quantity, price):
+        """ """
+        logging.debug('invoke set_limit_order of ManualControl')
+        order, response = self.client.Order.Order_new(
+            symbol='XBTUSD',
+            orderQty=quantity,
+            price=price,
+            ordType='Limit').result()
+        return order
+
+
 class Shell:
     """ """
     
@@ -30,7 +85,8 @@ class Shell:
                       'run_strategy',
                       'get_current_strategy')
     
-    def __init__(self, manual_controller, strategy_context):
+    def __init__(self, manual_controller: ManualControl, \
+                 strategy_context: Context):
         """ """
         self.init_client = InitClientShellCommand(
             self, manual_controller, strategy_context)
@@ -96,61 +152,6 @@ class Shell:
     def shell_exit(self):
         """ """
         self.running = False
-
-
-class ManualControl:
-    """ """
-    
-    def __init__(self):
-        """ """
-        self.client = None
-    
-    def init_client(self, public_key, private_key):
-        """ """
-        logging.debug('invoke init_client of ManualControl')
-        self.client = bitmex.bitmex(api_key=public_key, api_secret=private_key)
-    
-    def get_last_quote(self):
-        """ """
-        logging.debug('invoke get_last_quote of ManualControl')
-        result = None
-        cur_timestamp = time.time()
-        cur_time = datetime.datetime.fromtimestamp(cur_timestamp,
-                                                   tz=datetime.timezone.utc)
-        result_lst, response = self.client.Quote.Quote_get(
-            symbol='XBTUSD',
-            count=1,
-            reverse=True,
-            endTime=cur_time).result()
-        if result_lst:
-            result = result_lst[0]
-        return result
-    
-    def get_deposit_address(self):
-        """ """
-        logging.debug('invoke get_deposit_address of ManualControl')
-        deposit_addr, response = self.client.User.\
-            User_getDepositAddress().result()
-        return deposit_addr
-    
-    def get_open_orders(self):
-        """ """
-        logging.debug('invoke get_open_orders of ManualControl')
-        orders, response = self.client.Order.Order_getOrders(
-            filter='{"open":true}',
-            symbol='XBTUSD',
-            count=100).result()
-        return orders
-    
-    def set_limit_order(self, quantity, price):
-        """ """
-        logging.debug('invoke set_limit_order of ManualControl')
-        order, response = self.client.Order.Order_new(
-            symbol='XBTUSD',
-            orderQty=quantity,
-            price=price,
-            ordType='Limit').result()
-        return order
 
 
 class ShellCommand(metaclass=ABCMeta):
